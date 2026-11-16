@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Humanizer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f7f7f5; --card:#fff; --ink:#1b1b1a; --muted:#6b6b66; --line:#e4e3de;
+    --accent:#2f5bd3; --good:#1f8a4c; --mid:#c98a12; --bad:#c9412f;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#141413; --card:#1e1e1c; --ink:#ecebe6; --muted:#9a9993; --line:#33322f; --accent:#7d9cf0;}
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 Inter,system-ui,sans-serif}
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 20px 60px}
+  h1{font-size:22px;margin:0 0 4px;font-weight:700;letter-spacing:-.01em}
+  .sub{color:var(--muted);margin:0 0 22px;font-size:14px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media (max-width:860px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;min-height:420px}
+  .head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:10px}
+  .head h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0;font-weight:600}
+  textarea,.out{flex:1;width:100%;border:1px solid var(--line);border-radius:8px;padding:12px;font:inherit;color:inherit;background:transparent;resize:vertical;min-height:300px}
+  .out{white-space:pre-wrap;overflow:auto}
+  .out.empty{color:var(--muted)}
+  textarea:focus{outline:2px solid var(--accent);outline-offset:-1px}
+  .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:14px 0 0}
+  select{font:inherit;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+  button{font:inherit;font-weight:600;border:0;border-radius:8px;padding:9px 16px;cursor:pointer}
+  .primary{background:var(--accent);color:#fff}
+  .primary:disabled{opacity:.5;cursor:default}
+  .ghost{background:transparent;border:1px solid var(--line);color:var(--ink);padding:6px 12px;font-size:13px}
+  .meter{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+  .pill{font-weight:700;border-radius:999px;padding:2px 10px;font-size:13px;color:#fff}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
+  .stat{border:1px solid var(--line);border-radius:8px;padding:8px}
+  .stat b{display:block;font-size:16px}
+  .stat span{font-size:11.5px;color:var(--muted)}
+  .tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+  .tab{background:transparent;border:1px solid var(--line);color:var(--ink);padding:5px 10px;font-size:12.5px;font-weight:500}
+  .tab.on{border-color:var(--accent);color:var(--accent)}
+  .tab .best{color:var(--good);font-weight:700;margin-left:4px}
+  .status{font-size:13px;color:var(--muted);min-height:20px}
+  .err{color:var(--bad)}
+  .note{margin-top:22px;font-size:12.5px;color:var(--muted);line-height:1.6}
+  mark{background:rgba(201,65,47,.18);color:inherit;border-radius:3px;padding:0 1px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Humanizer</h1>
+  <p class="sub">Paste text, and it writes 3 rewrites in different styles, scores each one, and shows you the most human-sounding.</p>
+
+  <div class="card" style="min-height:0;margin-bottom:18px">
+    <div class="controls" style="margin:0">
+      <label class="meter">Anthropic API key
+        <input id="apiKey" type="password" placeholder="sk-ant-..." style="font:inherit;color:inherit;background:transparent;border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:300px">
+      </label>
+      <label class="meter">Model
+        <input id="model" value="claude-sonnet-5-5" style="font:inherit;color:inherit;background:transparent;border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:180px">
+      </label>
+      <label class="meter"><input type="checkbox" id="remember" checked> Remember on this device</label>
+    </div>
+    <div class="status" style="margin-top:8px">Your key is sent only to api.anthropic.com and saved only in this browser. Get one at console.anthropic.com.</div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="head"><h2>Original</h2><div class="meter" id="inMeter"></div></div>
+      <textarea id="input" placeholder="Paste text here..."></textarea>
+      <div class="stats" id="inStats"></div>
+    </div>
+    <div class="card">
+      <div class="head"><h2>Humanized</h2>
+        <div style="display:flex;gap:8px;align-items:center"><div class="meter" id="outMeter"></div><button class="ghost" id="copy" hidden>Copy</button></div>
+      </div>
+      <div class="tabs" id="tabs"></div>
+      <div class="out empty" id="output">The rewrite will appear here.</div>
+      <div class="stats" id="outStats"></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <label class="meter">Strength
+      <select id="strength">
+        <option value="light">Light (keep wording close)</option>
+        <option value="medium" selected>Medium</option>
+        <option value="heavy">Heavy (full rewrite)</option>
+      </select>
+    </label>
+    <label class="meter">Tone
+      <select id="tone">
+        <option value="match">Match original</option>
+        <option value="casual">Casual</option>
+        <option value="professional">Professional</option>
+        <option value="academic">Academic</option>
+      </select>
+    </label>
+    <button class="primary" id="go">Humanize</button>
+    <span class="status" id="status"></span>
+  </div>
+
+  <p class="note">
+    <b>How the score works:</b> this is a heuristic built from the same signals detectors use, not ZeroGPT's actual model. It's a mix of
+    <i>burstiness</i> (how much sentence length varies), <i>AI tells</i> (stock phrases, em dashes, formulaic transitions),
+    <i>sentence openers</i> (how often sentences start the same way) and <i>vocabulary repetition</i>. Lower means more human.
+    Always run the result through the real detector you care about and reread it for meaning. Phrases flagged as AI tells are highlighted in the original.
+  </p>
+</div>
+
+<script>
+const TELLS = [
+  "delve","delves","delving","tapestry","testament to","it's important to note","it is important to note","it's worth noting","it is worth noting",
+  "in conclusion","in summary","to summarize","overall,","furthermore","moreover","additionally","in today's","fast-paced","ever-evolving",
+  "navigate the","navigating the","landscape","realm","crucial","pivotal","vital role","plays a key role","plays a crucial role",
+  "seamless","seamlessly","leverage","leveraging","robust","foster","fostering","holistic","multifaceted","nuanced","intricate",
+  "underscore","underscores","showcase","showcases","embark","unlock","unleash","elevate","empower","harness","bustling","vibrant",
+  "a myriad of","myriad","plethora","not only","but also","whether you're","when it comes to","at the end of the day",
+  "in the world of","dive into","deep dive","game-changer","game changer","cutting-edge","resonate","resonates","meticulous","meticulously",
+  "commendable","noteworthy","paramount","ultimately,","essentially,","notably,","importantly,","in essence","serves as","stands as"
+];
+
+function sentences(t){
+  return t.replace(/\s+/g," ").trim().split(/(?<=[.!?])\s+(?=[A-Z0-9"'(])/).filter(s=>s.trim().length>0);
+}
+function words(t){ return (t.toLowerCase().match(/[a-z']+/g)||[]); }
+
+function analyze(text){
+  const sents = sentences(text);
+  const w = words(text);
+  if (w.length < 15 || sents.length < 2) return null;
+  const lens = sents.map(s=>words(s).length).filter(n=>n>0);
+  const mean = lens.reduce((a,b)=>a+b,0)/lens.length;
+  const sd = Math.sqrt(lens.reduce((a,b)=>a+(b-mean)**2,0)/lens.length);
+  const cv = sd/mean;                                   // burstiness
+  const low = text.toLowerCase();
+  let tellHits = 0;
+  for (const p of TELLS){ const re = new RegExp("\\b"+p.replace(/[.*+?^${}()|[\]\\]/g,"\\$&").replace(/,$/,",?"),"g"); tellHits += (low.match(re)||[]).length; }
+  const dashes = (text.match(/—|–| - /g)||[]).length;
+  const tellRate = (tellHits + dashes*1.5) / (w.length/100);   // per 100 words
+  const openers = sents.map(s=>(words(s)[0]||""));
+  const openerCounts = {}; openers.forEach(o=>openerCounts[o]=(openerCounts[o]||0)+1);
+  const repeatOpen = openers.length ? Math.max(...Object.values(openerCounts))/openers.length : 0;
+  const window = w.slice(0,400); const ttr = new Set(window).size/window.length;
+
+  // map each signal to 0..1 "AI-likeness"
+  const sB = clamp((0.65 - cv)/0.45);           // cv<=0.2 => 1, cv>=0.65 => 0
+  const sT = clamp(tellRate/4);                 // 4+ tells per 100 words => 1
+  const sO = clamp((repeatOpen-0.15)/0.35);
+  const lenTarget = window.length<150 ? 0.6 : 0.5;
+  const sV = clamp((lenTarget+0.08 - ttr)/0.2);
+  const score = Math.round(100*(0.42*sB + 0.33*sT + 0.12*sO + 0.13*sV));
+  return {score, cv, mean, tellHits:tellHits+dashes, tellRate, repeatOpen, ttr, n:w.length};
+}
+function clamp(x){return Math.max(0,Math.min(1,x));}
+
+function color(s){ return s<35?"var(--good)":s<60?"var(--mid)":"var(--bad)"; }
+function meterHTML(a){ return a ? `AI-likeness <span class="pill" style="background:${color(a.score)}">${a.score}</span>` : ""; }
+function statsHTML(a){
+  if(!a) return "";
+  return `<div class="stat"><b>${a.cv.toFixed(2)}</b><span>Burstiness (higher = human)</span></div>
+          <div class="stat"><b>${a.tellHits}</b><span>AI tells found</span></div>
+          <div class="stat"><b>${Math.round(a.repeatOpen*100)}%</b><span>Most common sentence opener</span></div>
+          <div class="stat"><b>${a.mean.toFixed(1)}</b><span>Avg words / sentence</span></div>`;
+}
+
+const $ = id=>document.getElementById(id);
+function refreshInput(){
+  const a = analyze($("input").value);
+  $("inMeter").innerHTML = meterHTML(a);
+  $("inStats").innerHTML = statsHTML(a);
+}
+$("input").addEventListener("input", refreshInput);
+
+const STYLES = [
+  {name:"Varied rhythm", hint:"Lean hardest on rhythm: mix very short sentences (3-6 words) with longer, winding ones. Use an occasional fragment."},
+  {name:"Plain & direct", hint:"Lean on plain, concrete, specific words a person would actually say. Cut filler and hedging. Prefer active voice."},
+  {name:"Conversational", hint:"Write like a sharp person explaining this to a friend: contractions, the odd aside in parentheses, a rhetorical question at most once, natural transitions instead of formal connectors."}
+];
+const STRENGTH = {
+  light:"Make the minimum changes needed. Keep most of the original wording and structure, adjusting sentence rhythm and swapping out formulaic phrases.",
+  medium:"Rewrite sentences freely but keep the paragraph structure and every point in the same order.",
+  heavy:"Fully rewrite in your own words. You may reorder sentences within a paragraph and merge or split paragraphs if it reads more naturally."
+};
+const TONE = {
+  match:"Keep the same tone and formality as the original.",
+  casual:"Use a relaxed, casual tone.",
+  professional:"Use a clear, professional tone (no slang).",
+  academic:"Use a formal academic register, but still vary sentence length and avoid stock academic filler."
+};
+
+function buildPrompt(text, style, strength, tone){
+  return `Rewrite the text below so it reads like it was written by a person, not an AI.
+
+Rules:
+- Keep the exact meaning, every fact, name and number. Do not add new claims, examples or details that aren't in the original.
+- ${STRENGTH[strength]}
+- ${TONE[tone]}
+- ${style.hint}
+- Vary sentence length a lot. Avoid a steady, even cadence.
+- Do not start several sentences the same way.
+- Never use em dashes or en dashes. Use commas, periods, parentheses or colons instead.
+- Avoid these AI-sounding words and phrases: ${TELLS.slice(0,60).join(", ")}.
+- Avoid tidy three-item lists, "not only... but also", and summary sentences at the end of paragraphs that restate the point.
+- Don't use bullet points or headings unless the original has them.
+- Keep roughly the same length (within 15%).
+
+Return ONLY the rewritten text, with no preface, notes or quotation marks.
+
+TEXT:
+"""
+${text}
+"""`;
+}
+
+let results = [], active = 0;
+try{
+  const k = localStorage.getItem("humanizer_key"); if(k) $("apiKey").value = k;
+  const m = localStorage.getItem("humanizer_model"); if(m) $("model").value = m;
+}catch(e){}
+function saveSettings(){
+  try{
+    if($("remember").checked){ localStorage.setItem("humanizer_key",$("apiKey").value.trim()); localStorage.setItem("humanizer_model",$("model").value.trim()); }
+    else { localStorage.removeItem("humanizer_key"); }
+  }catch(e){}
+}
+
+async function sample(prompt, {onText}={}){
+  const res = await fetch("https://api.anthropic.com/v1/messages",{
+    method:"POST",
+    headers:{
+      "content-type":"application/json",
+      "x-api-key":$("apiKey").value.trim(),
+      "anthropic-version":"2023-06-01",
+      "anthropic-dangerous-direct-browser-access":"true"
+    },
+    body:JSON.stringify({model:$("model").value.trim(),max_tokens:4096,temperature:1,stream:true,messages:[{role:"user",content:prompt}]})
+  });
+  if(!res.ok){
+    let msg = res.status+" error"; try{ const j=await res.json(); msg = j.error?.message||msg; }catch(e){}
+    throw {code: res.status===429?"rate_limited":"api_error", message: msg};
+  }
+  const reader = res.body.getReader(), dec = new TextDecoder();
+  let buf = "", text = "";
+  while(true){
+    const {done, value} = await reader.read(); if(done) break;
+    buf += dec.decode(value,{stream:true});
+    const lines = buf.split("\n"); buf = lines.pop();
+    for(const line of lines){
+      if(!line.startsWith("data:")) continue;
+      try{
+        const ev = JSON.parse(line.slice(5));
+        if(ev.type==="content_block_delta" && ev.delta?.text){ text += ev.delta.text; onText && onText({text}); }
+      }catch(e){}
+    }
+  }
+  return {text};
+}
+
+function renderTabs(){
+  const bestIdx = results.reduce((bi,r,i)=> (r.a && (bi<0 || r.a.score < results[bi].a.score)) ? i : bi, -1);
+  $("tabs").innerHTML = results.map((r,i)=>`<button class="tab ${i===active?"on":""}" data-i="${i}">${r.style.name}${r.a?` · ${r.a.score}`:r.err?" · failed":" · ..."}${i===bestIdx&&results.every(x=>x.done)?'<span class="best">best</span>':""}</button>`).join("");
+  $("tabs").querySelectorAll(".tab").forEach(b=>b.onclick=()=>{active=+b.dataset.i;renderOut();renderTabs();});
+}
+function renderOut(){
+  const r = results[active];
+  if(!r){return;}
+  const o = $("output");
+  if(r.err){ o.textContent = "This version failed: "+r.err; o.classList.add("empty"); }
+  else if(!r.text){ o.textContent = "Writing..."; o.classList.add("empty"); }
+  else { o.textContent = r.text; o.classList.remove("empty"); }
+  $("outMeter").innerHTML = meterHTML(r.a);
+  $("outStats").innerHTML = statsHTML(r.a);
+  $("copy").hidden = !r.done || !r.text;
+}
+
+$("go").onclick = async ()=>{
+  const text = $("input").value.trim();
+  if(words(text).length < 15){ $("status").textContent = "Paste at least a few sentences."; return; }
+  if(!$("apiKey").value.trim()){ $("status").textContent = "Add your Anthropic API key first."; return; }
+  saveSettings();
+  $("go").disabled = true; $("status").textContent = "Writing 3 versions...";
+  const strength = $("strength").value, tone = $("tone").value;
+  results = STYLES.map(s=>({style:s,text:"",a:null,done:false,err:null}));
+  active = 0; renderTabs(); renderOut();
+  await Promise.all(results.map(async (r,i)=>{
+    try{
+      const res = await sample(buildPrompt(text, r.style, strength, tone), {
+        onText:({text:t})=>{ if(t && t!=="Thinking..."){ r.text=t; if(i===active) renderOut(); } }
+      });
+      r.text = (res.text||"").trim().replace(/^"""|"""$/g,"").replace(/[—–]/g,", ").trim();
+      r.a = analyze(r.text);
+    }catch(e){
+      r.err = e && e.code==="rate_limited" ? "rate limited, try again in a minute" : (e && e.message) || "error";
+    }
+    r.done = true; renderTabs(); if(i===active) renderOut();
+  }));
+  const scored = results.map((r,i)=>({i,s:r.a?r.a.score:999}));
+  scored.sort((x,y)=>x.s-y.s);
+  active = scored[0].i; renderTabs(); renderOut();
+  const before = analyze(text);
+  const best = results[active].a;
+  $("status").textContent = best && before ? `Done. Best version: ${before.score} → ${best.score}.` : "Done.";
+  $("go").disabled = false;
+};
+
+$("copy").onclick = async ()=>{
+  try{ await navigator.clipboard.writeText(results[active].text); $("copy").textContent="Copied"; setTimeout(()=>$("copy").textContent="Copy",1200); }
+  catch(e){ $("copy").textContent="Select & copy manually"; }
+};
+</script>
+</body>
+</html>
